@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Match AI Analyst</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Цвета берутся из темы Telegram, поэтому приложение выглядит «родным» и в светлой, и в тёмной теме */
+  :root {
+    --bg: var(--tg-theme-bg-color, #0f1720);
+    --bg2: var(--tg-theme-secondary-bg-color, #17212b);
+    --text: var(--tg-theme-text-color, #f2f5f8);
+    --hint: var(--tg-theme-hint-color, #8a97a5);
+    --accent: var(--tg-theme-button-color, #2ea6ff);
+    --accent-text: var(--tg-theme-button-text-color, #fff);
+    --live: #ff4d4f;
+    --ok: #2fbf71;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 16px 16px 8px; }
+  h1 { margin: 0; font-size: 20px; }
+  .sub { color: var(--hint); font-size: 13px; margin-top: 2px; }
+  .tabs { display: flex; gap: 4px; margin: 10px 12px; padding: 3px; background: var(--bg2); border-radius: 12px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 1; border: 0; background: none; color: var(--text); padding: 8px 3px; border-radius: 8px;
+         font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; text-align: center; }
+  .tab.active { background: var(--accent); color: var(--accent-text); }
+  main { padding: 0 14px 32px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; border: 1px solid transparent; background: var(--bg2); color: var(--text); padding: 7px 12px;
+          border-radius: 999px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  .chip.active { border-color: var(--accent); color: var(--accent); }
+  .card { background: var(--bg2); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+  .match { cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .match:active { opacity: .7; }
+  .teams { font-weight: 600; }
+  .meta { color: var(--hint); font-size: 13px; }
+  .score { font-weight: 700; font-size: 17px; text-align: right; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+           background: var(--live); color: #fff; margin-right: 6px; vertical-align: 1px; }
+  .muted { color: var(--hint); text-align: center; padding: 28px 8px; }
+  .back { background: none; border: 0; color: var(--accent); font-size: 15px; padding: 4px 0 12px; cursor: pointer; }
+  .section h3 { margin: 0 0 6px; font-size: 16px; }
+  .section p { margin: 0; white-space: pre-wrap; }
+  details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  details pre { white-space: pre-wrap; font: 13px/1.4 ui-monospace, Consolas, monospace; color: var(--hint); margin: 10px 0 0; }
+  textarea { width: 100%; min-height: 110px; border: 0; border-radius: var(--radius); padding: 12px; resize: vertical;
+             background: var(--bg2); color: var(--text); font: inherit; }
+  .search-wrap { margin-bottom: 10px; }
+  .search-input { width: 100%; border: 0; border-radius: var(--radius); padding: 10px 14px;
+                  background: var(--bg2); color: var(--text); font: inherit; font-size: 14px; outline: none; }
+  .search-input:focus { box-shadow: 0 0 0 2px var(--accent); }
+  .btn { width: 100%; border: 0; border-radius: 12px; padding: 13px; margin-top: 10px; font-weight: 700; font-size: 15px;
+         background: var(--accent); color: var(--accent-text); cursor: pointer; transition: background .15s, opacity .15s; }
+  .btn:disabled { opacity: .5; }
+  .btn-secondary { background: var(--bg2); color: var(--text); border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); }
+  .btn-secondary:active { background: color-mix(in srgb, var(--text) 10%, var(--bg2)); }
+  .img-preview { position: relative; margin-top: 10px; border-radius: var(--radius); overflow: hidden; max-height: 220px; background: #000; }
+  .img-preview img { width: 100%; max-height: 220px; object-fit: contain; display: block; }
+  .img-remove { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #fff; border: 0;
+                border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-size: 14px; }
+  .upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+                border: 2px dashed color-mix(in srgb, var(--text) 20%, transparent); border-radius: var(--radius);
+                padding: 14px; color: var(--hint); font-size: 14px; margin-top: 10px; text-align: center; }
+  .upload-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .error { color: var(--live); }
+  .skeleton { height: 64px; border-radius: var(--radius); margin-bottom: 10px;
+              background: linear-gradient(90deg, var(--bg2) 25%, color-mix(in srgb, var(--bg2), var(--text) 8%) 50%, var(--bg2) 75%);
+              background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .thinking { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from { opacity: .3; } to { opacity: 1; } }
+  .disclaimer { color: var(--hint); font-size: 12px; text-align: center; margin-top: 12px; }
+  .radar-card { cursor: pointer; border-left: 3px solid var(--accent); transition: transform .1s; margin-bottom: 10px; }
+  .radar-card:active { transform: scale(0.98); }
+  .radar-tagline { font-size: 13px; color: var(--hint); margin-top: 6px; line-height: 1.35; }
+  .radar-badge { font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 6px; display: inline-block; margin-bottom: 4px; }
+  .badge-storm { background: rgba(255, 68, 68, 0.18); color: #ff5252; border: 1px solid rgba(255, 68, 68, 0.3); }
+  .badge-red_card { background: rgba(220, 53, 69, 0.2); color: #ff4d4f; border: 1px solid rgba(220, 53, 69, 0.35); }
+  .badge-comeback { background: rgba(255, 193, 7, 0.18); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.3); }
+  .badge-dry { background: rgba(23, 162, 184, 0.18); color: #17a2b8; border: 1px solid rgba(23, 162, 184, 0.3); }
+  .badge-hot { background: rgba(0, 123, 255, 0.18); color: #007bff; border: 1px solid rgba(0, 123, 255, 0.3); }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ Match AI Analyst</h1>
+  <div class="sub">ИИ-прогнозы, радар аномалий и экспрессы · 7 видов спорта</div>
+</header>
+<nav class="tabs">
+  <button class="tab active" data-tab="radar">⚡ Радар</button>
+  <button class="tab" data-tab="express">🎯 Экспресс</button>
+  <button class="tab" data-tab="live">🔴 Лайв</button>
+  <button class="tab" data-tab="pre">📅 Прогнозы</button>
+  <button class="tab" data-tab="text">🔎 Свои</button>
+</nav>
+<main id="view"></main>
+
+<script>
+const tg = window.Telegram?.WebApp;
+tg?.ready();
+tg?.expand();
+
+const view = document.getElementById("view");
+const state = {
+  tab: "radar",
+  sports: null,
+  sport: "soccer",
+  league: "soccer/eng.1",
+  radarList: [],
+  expressPreset: "optimal",
+  liveMatches: [],
+  liveQuery: "",
+  liveSport: "all",
+  uploadedImage: null,
+  textDraft: "",
+};
+
+const LIVE_SPORTS = [
+  { code: "all", label: "Все" },
+  { code: "soccer", label: "⚽ Футбол" },
+  { code: "hockey", label: "🏒 Хоккей" },
+  { code: "basketball", label: "🏀 Баскетбол" },
+  { code: "tennis", label: "🎾 Теннис" },
+  { code: "baseball", label: "⚾ Бейсбол" },
+  { code: "football", label: "🏈 Амер. футбол" },
+  { code: "mma", label: "🥊 MMA" },
+];
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const haptic = () => tg?.HapticFeedback?.impactOccurred("light");
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", "X-Telegram-Init-Data": tg?.initData || "" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+  return data;
+}
+
+const skeleton = (n = 4) => Array(n).fill('<div class="skeleton"></div>').join("");
+const errorBox = e => `<div class="card error">❌ ${esc(e.message)}</div>`;
+
+function matchRow(m, live) {
+  const score = live
+    ? `<div class="score">${m.sport === "tennis" ? "" : esc(m.home_score) + ":" + esc(m.away_score)}</div>`
+    : `<div class="meta">${esc(m.kickoff)}</div>`;
+  const sub = live
+    ? `<span class="badge">LIVE</span>${esc(m.sport === "tennis" ? m.home_score + " — " + m.away_score : m.clock)} · ${esc(m.league_name)}`
+    : esc(m.note || m.league_name);
+  return `<div class="card match" data-id="${esc(m.id)}" data-league="${esc(m.league)}">
+    <div class="teams">${esc(m.home)} — ${esc(m.away)}</div>${score}
+    <div class="meta" style="grid-column:1/-1">${sub}</div></div>`;
+}
+
+function bindMatches(mode, back) {
+  view.querySelectorAll(".match").forEach(el =>
+    el.addEventListener("click", () => {
+      haptic();
+      analyze(mode, { league: el.dataset.league, id: el.dataset.id }, back, el.querySelector(".teams").textContent);
+    }));
+}
+
+// ---------- Радар лайв-аномалий ----------
+async function showRadar() {
+  view.innerHTML = skeleton(3);
+  try {
+    const list = await api("/api/radar");
+    state.radarList = list;
+    if (!list.length) {
+      view.innerHTML = `
+        <div class="card" style="text-align:center; padding:26px 14px;">
+          <div style="font-size:36px; margin-bottom:8px;">📡</div>
+          <div style="font-weight:700; font-size:16px;">Радар сканирует матчи...</div>
+          <div class="meta" style="margin-top:6px; line-height:1.4;">Прямо сейчас нет экстремальных аномалий (матчи идут в спокойном темпе). Загляните через несколько минут или соберите экспресс дня.</div>
+          <button class="btn btn-secondary" id="radar-retry" style="margin-top:14px; width:auto; padding:8px 18px; display:inline-block;">🔄 Сканировать снова</button>
+        </div>`;
+      document.getElementById("radar-retry")?.addEventListener("click", () => { haptic(); showRadar(); });
+      return;
+    }
+
+    view.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div class="meta">⚡ Обнаружено аномалий: <b>${list.length}</b></div>
+        <button class="btn btn-secondary" id="radar-refresh-top" style="width:auto; padding:5px 12px; margin-top:0; font-size:13px;">🔄 Обновить</button>
+      </div>
+      <div id="radar-items">
+        ${list.map(a => `
+          <div class="card radar-card" data-event-id="${esc(a.event_id)}" data-league="${esc(a.league)}" data-badge="${esc(a.badge)}" data-tagline="${esc(a.tagline)}">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <span class="radar-badge badge-${esc(a.kind)}">${esc(a.badge)}</span>
+              <span class="score" style="color:var(--live); font-size:15px;">${esc(a.clock)}</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; margin-top:4px;">
+              <div class="teams" style="font-size:15px;">${esc(a.home)} — ${esc(a.away)}</div>
+              <div class="score">${esc(a.home_score)}:${esc(a.away_score)}</div>
+            </div>
+            <div class="radar-tagline">👉 ${esc(a.tagline)}</div>
+            <button class="btn" style="padding:9px; margin-top:10px; font-size:13px; font-weight:600;">⚡ Разобрать точку входа</button>
+          </div>
+        `).join("")}
+      </div>`;
+
+    document.getElementById("radar-refresh-top")?.addEventListener("click", () => { haptic(); showRadar(); });
+
+    view.querySelectorAll(".radar-card").forEach(el => {
+      el.addEventListener("click", () => {
+        haptic();
+        analyze("radar", {
+          league: el.dataset.league,
+          id: el.dataset.eventId,
+          badge: el.dataset.badge,
+          tagline: el.dataset.tagline
+        }, showRadar, el.querySelector(".teams").textContent);
+      });
+    });
+  } catch (e) {
+    view.innerHTML = errorBox(e);
+  }
+}
+
+// ---------- ИИ-Конструктор экспрессов ----------
+async function showExpress() {
+  state.expressPreset = state.expressPreset || "optimal";
+
+  const presets = [
+    { key: "reliable", icon: "🛡️", label: "Надежный", k: "~2.00", desc: "Двойник из 2 самых надежных событий с высокой вероятностью (65–75%)." },
+    { key: "optimal", icon: "⚖️", label: "Оптимальный", k: "~3.50", desc: "2–3 статусных события с отличным перевесом (Value) над линией БК." },
+    { key: "risky", icon: "🚀", label: "Хайроллер", k: "~6.00+", desc: "3–4 события с повышенными котировками (форы, индивидуальные тоталы)." },
+  ];
+
+  const current = presets.find(p => p.key === state.expressPreset) || presets[1];
+
+  view.innerHTML = `
+    <div class="meta" style="margin-bottom:8px;">Выберите профиль риска и целевой коэффициент:</div>
+    <div class="chips">
+      ${presets.map(p => `
+        <button class="chip ${p.key === state.expressPreset ? "active" : ""}" data-express-preset="${p.key}">
+          ${p.icon} ${p.label} (${p.k})
+        </button>
+      `).join("")}
+    </div>
+
+    <div class="card" style="margin-top:4px;">
+      <div style="font-weight:700; font-size:16px; margin-bottom:4px;">${current.icon} ${current.label} (кэф ${current.k})</div>
+      <div class="meta" style="line-height:1.4;">${current.desc}</div>
+      <button class="btn" id="generate-express-btn" style="margin-top:14px;">🎯 Собрать ИИ-экспресс дня</button>
+    </div>
+
+    <div id="express-result" style="margin-top:12px;"></div>`;
+
+  view.querySelectorAll("[data-express-preset]").forEach(btn => {
+    btn.onclick = () => {
+      haptic();
+      state.expressPreset = btn.dataset.expressPreset;
+      showExpress();
+    };
+  });
+
+  const genBtn = document.getElementById("generate-express-btn");
+  if (genBtn) {
+    genBtn.onclick = async () => {
+      haptic();
+      const resContainer = document.getElementById("express-result");
+      if (!resContainer) return;
+      genBtn.disabled = true;
+      genBtn.textContent = "⏳ ИИ рассчитывает купон... (10–20 сек)";
+      resContainer.innerHTML = `<div class="thinking meta" style="margin-top:8px"><span class="dot"></span>Подбираю независимые события и рассчитываю вероятности…</div>${skeleton(3)}`;
+
+      try {
+        const data = await api("/api/express", { preset: state.expressPreset, force: true });
+        tg?.HapticFeedback?.notificationOccurred("success");
+        genBtn.disabled = false;
+        genBtn.textContent = "🔄 Собрать другой вариант";
+
+        resContainer.innerHTML = `
+          <div class="card" style="border:1px solid var(--accent); margin-bottom:12px;">
+            <div class="teams" style="font-size:16px;">${esc(data.slip_title || "Экспресс дня")}</div>
+            <div class="meta" style="margin-top:4px;">Сгенерировано ИИ на основе математического ожидания (Value)</div>
+          </div>
+          ${renderAnalysis(data.analysis)}
+          <div style="margin-top:12px;">
+            <button class="btn btn-secondary" id="copy-express-btn" style="margin-top:0;">📋 Скопировать экспресс-купон</button>
+          </div>
+          <div class="disclaimer">Экспресс составлен на основе математического анализа котировок. 18+</div>`;
+
+        document.getElementById("copy-express-btn")?.addEventListener("click", () => {
+          const textToCopy = `${data.slip_title || "Экспресс дня"}\n\n${data.analysis}\n\n---\nMatch AI Analyst`;
+          const copyPromise = (navigator.clipboard && window.isSecureContext)
+            ? navigator.clipboard.writeText(textToCopy)
+            : new Promise((resolve, reject) => {
+                try {
+                  const ta = document.createElement("textarea");
+                  ta.value = textToCopy;
+                  ta.style.position = "fixed";
+                  ta.style.opacity = "0";
+                  document.body.appendChild(ta);
+                  ta.focus();
+                  ta.select();
+                  const ok = document.execCommand("copy");
+                  ta.remove();
+                  if (ok) resolve(); else reject(new Error("copy failed"));
+                } catch (err) { reject(err); }
+              });
+
+          copyPromise.then(() => {
+            haptic();
+            const b = document.getElementById("copy-express-btn");
+            if (b) {
+              b.textContent = "✅ Купон скопирован!";
+              setTimeout(() => { if (b) b.textContent = "📋 Скопировать экспресс-купон"; }, 2000);
+            }
+          }).catch(() => {
+            tg?.showAlert?.("Купон скопирован!") ?? alert("Скопировано");
+          });
+        });
+
+      } catch (err) {
+        genBtn.disabled = false;
+        genBtn.textContent = "🎯 Попробовать снова";
+        resContainer.innerHTML = errorBox(err);
+      }
+    };
+  }
+}
+
+// ---------- Лайв ----------
+async function showLive() {
+  view.innerHTML = skeleton();
+  try {
+    const list = await api("/api/live");
+    state.liveMatches = list;
+    if (!list.length) {
+      view.innerHTML = `<div class="muted">Сейчас нет идущих матчей.<br>Загляните во время игр или откройте «Прогнозы».</div>`;
+      return;
+    }
+    renderLiveView();
+  } catch (e) { view.innerHTML = errorBox(e); }
+}
+
+function renderLiveView() {
+  const list = state.liveMatches || [];
+  const q = (state.liveQuery || "").toLowerCase().trim();
+  const sport = state.liveSport || "all";
+
+  const filtered = list.filter(m => {
+    if (sport !== "all" && m.sport !== sport) return false;
+    if (q) {
+      const text = `${m.home} ${m.away} ${m.league_name}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const sportCounts = {};
+  list.forEach(m => { sportCounts[m.sport] = (sportCounts[m.sport] || 0) + 1; });
+
+  const sportsHtml = LIVE_SPORTS.filter(s => s.code === "all" || (sportCounts[s.code] || 0) > 0).map(s => {
+    const cnt = s.code === "all" ? list.length : (sportCounts[s.code] || 0);
+    const active = (state.liveSport || "all") === s.code ? "active" : "";
+    return `<button class="chip ${active}" data-live-sport="${s.code}">${esc(s.label)} (${cnt})</button>`;
+  }).join("");
+
+  view.innerHTML = `
+    <div class="search-wrap">
+      <input type="search" id="live-search" class="search-input" placeholder="🔍 Поиск команды или турнира..." value="${esc(state.liveQuery || "")}">
+    </div>
+    <div class="chips">${sportsHtml}</div>
+    <div class="meta" style="margin-bottom:8px">Идут сейчас: ${filtered.length}${filtered.length !== list.length ? ` (из ${list.length})` : ""}. Нажмите на матч:</div>
+    <div id="live-list">
+      ${filtered.length ? filtered.map(m => matchRow(m, true)).join("") : `<div class="muted">Ничего не найдено по вашему запросу.</div>`}
+    </div>`;
+
+  const searchInput = document.getElementById("live-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.liveQuery = e.target.value;
+      updateLiveListOnly();
+    });
+  }
+
+  view.querySelectorAll("[data-live-sport]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      haptic();
+      state.liveSport = btn.dataset.liveSport;
+      renderLiveView();
+    });
+  });
+
+  bindMatches("live", showLive);
+}
+
+function updateLiveListOnly() {
+  const list = state.liveMatches || [];
+  const q = (state.liveQuery || "").toLowerCase().trim();
+  const sport = state.liveSport || "all";
+
+  const filtered = list.filter(m => {
+    if (sport !== "all" && m.sport !== sport) return false;
+    if (q) {
+      const text = `${m.home} ${m.away} ${m.league_name}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const listContainer = document.getElementById("live-list");
+  if (listContainer) {
+    listContainer.innerHTML = filtered.length
+      ? filtered.map(m => matchRow(m, true)).join("")
+      : `<div class="muted">Ничего не найдено по вашему запросу.</div>`;
+    bindMatches("live", showLive);
+  }
+}
+
+// ---------- Прогнозы ----------
+async function showPre() {
+  if (!state.sports) {
+    view.innerHTML = skeleton(2);
+    try { state.sports = await api("/api/sports"); } catch (e) { view.innerHTML = errorBox(e); return; }
+  }
+  const sport = state.sports.find(s => s.code === state.sport) || state.sports[0];
+  if (!sport.leagues.some(l => l.key === state.league)) state.league = sport.leagues[0].key;
+
+  view.innerHTML =
+    `<div class="chips">${state.sports.map(s =>
+      `<button class="chip ${s.code === sport.code ? "active" : ""}" data-sport="${s.code}">${esc(s.label)}</button>`).join("")}</div>
+     <div class="chips">${sport.leagues.map(l =>
+      `<button class="chip ${l.key === state.league ? "active" : ""}" data-league="${l.key}">${esc(l.label)}</button>`).join("")}</div>
+     <div id="list">${skeleton()}</div>`;
+
+  view.querySelectorAll("[data-sport]").forEach(b => b.onclick = () => { haptic(); state.sport = b.dataset.sport; state.league = ""; state.preQuery = ""; showPre(); });
+  view.querySelectorAll(".chip[data-league]").forEach(b => b.onclick = () => { haptic(); state.league = b.dataset.league; state.preQuery = ""; showPre(); });
+  view.querySelector(".chip.active[data-league]")?.scrollIntoView({ inline: "center", block: "nearest" });
+
+  const list = document.getElementById("list");
+  try {
+    const fixtures = await api(`/api/fixtures?league=${encodeURIComponent(state.league)}`);
+    state.preFixtures = fixtures;
+    renderPreList();
+  } catch (e) { list.innerHTML = errorBox(e); }
+}
+
+function renderPreList() {
+  const fixtures = state.preFixtures || [];
+  const q = (state.preQuery || "").toLowerCase().trim();
+  const list = document.getElementById("list");
+  if (!list) return;
+
+  if (!fixtures.length) {
+    list.innerHTML = `<div class="muted">В ближайшие 7 дней матчей нет.<br>Выберите другой турнир.</div>`;
+    return;
+  }
+
+  const filtered = q
+    ? fixtures.filter(m => (m.home + " " + m.away + " " + (m.note || "")).toLowerCase().includes(q))
+    : fixtures;
+
+  list.innerHTML = `
+    <div class="search-wrap" style="margin-top:6px">
+      <input type="search" id="pre-search" class="search-input" placeholder="🔍 Поиск матча в этом турнире..." value="${esc(state.preQuery || "")}">
+    </div>
+    <div class="meta" style="margin-bottom:8px">Ближайшие матчи (${filtered.length}):</div>
+    <div id="pre-items">
+      ${filtered.length ? filtered.map(m => matchRow(m, false)).join("") : `<div class="muted">Ничего не найдено по запросу.</div>`}
+    </div>`;
+
+  const searchInput = document.getElementById("pre-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.preQuery = e.target.value;
+      const qVal = state.preQuery.toLowerCase().trim();
+      const itemsContainer = document.getElementById("pre-items");
+      if (itemsContainer) {
+        const matches = qVal
+          ? fixtures.filter(m => (m.home + " " + m.away + " " + (m.note || "")).toLowerCase().includes(qVal))
+          : fixtures;
+        itemsContainer.innerHTML = matches.length
+          ? matches.map(m => matchRow(m, false)).join("")
+          : `<div class="muted">Ничего не найдено по запросу.</div>`;
+        bindMatches("pre", showPre);
+      }
+    });
+  }
+
+  bindMatches("pre", showPre);
+}
+
+// ---------- Свои данные / Скриншот ----------
+function showText() {
+  const hasImage = !!state.uploadedImage;
+
+  view.innerHTML = `
+    <div class="meta" style="margin-bottom:8px">Вставьте статистику матча текстом или прикрепите скриншот линии из БК / Flashscore:</div>
+    <textarea id="input" placeholder="Реал Мадрид — Барселона, 60-я минута, 1:1&#10;Удары 9 (4 в створ) / 12 (3 в створ), xG 1.35 / 0.92&#10;Коэф. на П1: 2.40 → 2.95">${esc(state.textDraft || "")}</textarea>
+    
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    
+    <div id="img-container">
+      ${hasImage ? `
+        <div class="img-preview">
+          <img src="${state.uploadedImage}">
+          <button class="img-remove" id="remove-img" title="Удалить">✕</button>
+        </div>
+      ` : `
+        <div class="upload-btn" id="upload-trigger">
+          <span>📸 Загрузить скриншот из БК или Flashscore</span>
+        </div>
+      `}
+    </div>
+
+    <button class="btn" id="go">Разобрать данные</button>`;
+
+  const inputArea = document.getElementById("input");
+  inputArea.addEventListener("input", e => { state.textDraft = e.target.value; });
+
+  const fileInput = document.getElementById("file-input");
+  const uploadTrigger = document.getElementById("upload-trigger");
+  if (uploadTrigger) uploadTrigger.onclick = () => fileInput.click();
+
+  fileInput.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        state.uploadedImage = ev.target.result;
+        showText();
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  const removeBtn = document.getElementById("remove-img");
+  if (removeBtn) {
+    removeBtn.onclick = () => {
+      state.uploadedImage = null;
+      showText();
+    };
+  }
+
+  window.onpaste = e => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = ev => {
+            state.uploadedImage = ev.target.result;
+            showText();
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    }
+  };
+
+  document.getElementById("go").onclick = () => {
+    const text = (document.getElementById("input")?.value || "").trim();
+    if (state.uploadedImage) {
+      haptic();
+      analyze("image", { image: state.uploadedImage, caption: text }, showText, "Разбор скриншота БК");
+      return;
+    }
+    if (text.length < 5) {
+      tg?.showAlert?.("Напишите название команд или добавьте больше данных.") ?? alert("Напишите название команд или добавьте данные");
+      return;
+    }
+    haptic();
+    analyze("text", { text }, showText, "Разбор ваших данных");
+  };
+}
+
+// ---------- Разбор от ИИ ----------
+// Ответ модели делится на блоки по строкам-заголовкам, начинающимся с эмодзи (⚽ 📊 💰 🎯 ⚠️ …)
+function renderAnalysis(text) {
+  const blocks = [];
+  for (const line of text.split("\n")) {
+    if (/^\p{Extended_Pictographic}/u.test(line.trim()) && line.trim().length < 60) blocks.push({ title: line.trim(), body: [] });
+    else if (blocks.length) blocks[blocks.length - 1].body.push(line);
+    else blocks.push({ title: "", body: [line] });
+  }
+  return blocks.map(b => `<div class="card section">${b.title ? `<h3>${esc(b.title)}</h3>` : ""}<p>${esc(b.body.join("\n").trim())}</p></div>`).join("");
+}
+
+async function analyze(mode, params, back, title) {
+  tg?.BackButton?.show();
+  tg?.BackButton?.onClick(goBack);
+  window.__back = back;
+  view.innerHTML = `<button class="back" onclick="goBack()">← Назад</button>
+    <div class="card"><div class="teams">${esc(title)}</div>
+    <div class="thinking meta" style="margin-top:8px"><span class="dot"></span>Собираю данные и спрашиваю ИИ… 10–25 секунд</div></div>${skeleton(3)}`;
+  try {
+    const { card, analysis } = await api("/api/analyze", { mode, ...params });
+    tg?.HapticFeedback?.notificationOccurred("success");
+    view.innerHTML = `<button class="back" onclick="goBack()">← Назад</button>
+      <div class="card"><div class="teams">${esc(title)}</div>
+      <details style="margin-top:8px"><summary>Данные, которые получил ИИ</summary><pre>${esc(card)}</pre></details></div>
+      ${renderAnalysis(analysis)}
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn btn-secondary" id="copy-btn" style="margin-top:0; flex:1">📋 Скопировать прогноз</button>
+        ${(mode === "live" || mode === "radar") ? `<button class="btn" id="again" style="margin-top:0; flex:1">🔄 Обновить</button>` : ""}
+      </div>
+      <div class="disclaimer">Аналитика носит информационный характер и не является гарантией результата. 18+</div>`;
+    
+    document.getElementById("again")?.addEventListener("click", () => analyze(mode, params, back, title));
+
+    document.getElementById("copy-btn")?.addEventListener("click", () => {
+      const fullText = `${title}\n\n${analysis}\n\n---\nMatch AI Analyst`;
+      const copyPromise = (navigator.clipboard && window.isSecureContext)
+        ? navigator.clipboard.writeText(fullText)
+        : new Promise((resolve, reject) => {
+            try {
+              const ta = document.createElement("textarea");
+              ta.value = fullText;
+              ta.style.position = "fixed";
+              ta.style.opacity = "0";
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              const ok = document.execCommand("copy");
+              ta.remove();
+              if (ok) resolve(); else reject(new Error("copy failed"));
+            } catch (err) { reject(err); }
+          });
+
+      copyPromise.then(() => {
+        haptic();
+        const b = document.getElementById("copy-btn");
+        if (b) {
+          b.textContent = "✅ Скопировано!";
+          b.style.borderColor = "var(--ok)";
+          b.style.color = "var(--ok)";
+          setTimeout(() => {
+            if (b) {
+              b.textContent = "📋 Скопировать прогноз";
+              b.style.borderColor = "";
+              b.style.color = "";
+            }
+          }, 2000);
+        }
+      }).catch(() => {
+        tg?.showAlert?.("Текст скопирован!") ?? alert("Скопировано");
+      });
+    });
+
+  } catch (e) {
+    tg?.HapticFeedback?.notificationOccurred("error");
+    view.innerHTML = `<button class="back" onclick="goBack()">← Назад</button>${errorBox(e)}`;
+  }
+}
+
+function goBack() {
+  tg?.BackButton?.hide();
+  tg?.BackButton?.offClick(goBack);
+  (window.__back || render)();
+}
+
+function render() {
+  const map = { radar: showRadar, express: showExpress, live: showLive, pre: showPre, text: showText };
+  (map[state.tab] || showRadar)();
+}
+
+document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
+  haptic();
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+  state.tab = btn.dataset.tab;
+  tg?.BackButton?.hide();
+  tg?.BackButton?.offClick(goBack);
+  window.__back = null;
+  render();
+}));
+
+render();
+</script>
+</body>
+</html>

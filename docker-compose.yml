@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: .
+    container_name: match_analyst_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./cache.json:/app/cache.json
